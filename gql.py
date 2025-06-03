@@ -8,7 +8,6 @@ class WriteUpdateAssetPosition:
         self.altitude = altitude
 
     def to_gql(self):
-        # This is the mutation string; you can adjust the formatting if needed
         mutation = """
         mutation UpdateAssetPosition(
             $asset_name: String!, 
@@ -27,12 +26,10 @@ class WriteUpdateAssetPosition:
             }
         }
         """
-        
-        # Create IsdOperationParams with the required parameters
         params = IsdOperationParams()
-        params["asset_name"] = self.asset_name
-        params["latitude"] = self.latitude
-        params["longitude"] = self.longitude
-        params["altitude"] = self.altitude
+        params.add_str("asset_name", self.asset_name)
+        params.add_float("latitude", self.latitude)
+        params.add_float("longitude", self.longitude)
+        params.add_float("altitude", self.altitude)
         
         return mutation, params
