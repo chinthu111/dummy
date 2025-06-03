@@ -8,7 +8,6 @@ class WriteUpdateAssetPosition:
         self.altitude = altitude
 
     def to_gql(self):
-        # Construct the GraphQL mutation
         mutation = """
         mutation UpdateAssetPosition($asset_name: String!, $lat: Float!, $lon: Float!, $alt: Float!) {
             updateAssetPosition(assetName: $asset_name, latitude: $lat, longitude: $lon, altitude: $alt) {
@@ -17,13 +16,11 @@ class WriteUpdateAssetPosition:
             }
         }
         """
-        # Create a dict of parameters
-        params_dict = {
-            "asset_name": self.asset_name,
-            "lat": self.latitude,
-            "lon": self.longitude,
-            "alt": self.altitude
-        }
-        # Convert dict to IsdOperationParams
-        op_params = IsdOperationParams(params_dict)
+        # Proper creation of IsdOperationParams
+        op_params = IsdOperationParams()
+        op_params.add_param("asset_name", self.asset_name)
+        op_params.add_param("lat", self.latitude)
+        op_params.add_param("lon", self.longitude)
+        op_params.add_param("alt", self.altitude)
+
         return mutation, op_params
