@@ -1,135 +1,97 @@
-# dummy
-dummy-python
-1. What to Simulate in a DDIL Environment
-For ISD testing, you should cover both network-level conditions and operational behaviors your system will face.
+What is a DDIL Environment in Our ISD Context?
 
-A. Network Impairments
-These reflect what tactical, mobile, or satellite links experience:
+  A DDIL environment for your ISD is a degraded and constrained communication scenario where:
 
-Latency:
+Assets (nodes) operate under:
 
-Fixed delays (200ms, 500ms, 1500ms).
+High latency (e.g., 500–2000ms RTT)
 
-Jitter (±50–500ms) to simulate unstable paths.
+Low bandwidth (e.g., 64–512 kbps)
 
-Bandwidth Limits:
+Packet loss or jitter
 
-Constrained (e.g., 64 kbps, 256 kbps, 1 Mbps).
+Intermittent connectivity
 
-Sudden fluctuations (e.g., 64 kbps → 512 kbps → 0).
+Participants may sync eventually or strongly, depending on context.
 
-Packet Loss:
+All ISD modules (GraphQL, Zenoh, storage, apps) must remain functionally resilient and efficient.
 
-Random (1–10%).
 
-Burst loss (several packets dropped in a row).
 
-Packet Duplication or Reordering:
+These are the DDIL stress variables you’ll simulate across scenarios:
 
-Some links cause out-of-order delivery.
+Parameter	Why It Matters
+Latency [ms]	Affects request/response, sync delays
+Jitter [ms]	Breaks protocol expectations, retries/resends
+Bandwidth [kbps]	Limits throughput, stresses buffering
+Packet Loss [%]	Tests retransmission, resiliency
+Disconnection Duration [s]	Tests reconnect & sync correctness
+Message Size [B]	Stresses compression & transport efficiency
+Number of Participants	Tests scalability & system contention
 
-Corruption:
 
-Occasional bit errors (forces retries).
+ISD Behaviors to Monitor and Validate
 
-Intermittent Connectivity:
+Time Behavior
+Initialization Time
 
-Assets go offline for seconds/minutes (simulate mobility or range).
+Cold start (empty DB, full sync)
 
-Rejoin events should be tested for recovery.
+Hot start (preloaded data)
 
-B. Proximity & Mobility
-Nodes “discover” each other only when in range (simulate by toggling links).
+Operation Rates
 
-Overlapping vs non-overlapping connectivity zones:
+Nominal read/write ops per second
 
-Some nodes can see each other, others can’t.
+End-to-End Latency
 
-Changing topologies (mesh formation and teardown).
+Read latency (request/response)
 
-C. Load & Scaling
-Vary number of topics and subscribers (e.g., 10 vs 500).
+Write latency (request/ack)
 
-Test large payloads (video, large JSON) vs small updates (status pings).
+Listen (write-to-receive propagation)
 
-Introduce publish bursts (e.g., 100 messages per second for 10 seconds).
+Resolver Timing
 
-2. KPIs to Measure for ISD
-To validate your ISD, measure end-to-end performance, reliability, and resilience.
+Resolver execution duration
 
-A. Data Delivery Metrics
-Delivery Latency
+QoS allocation latency
 
-Time from publisher send → subscriber receive.
+Local DB latency
 
-Measure 50th/95th/99th percentile latency under various impairments.
+Networking latency
 
-Throughput / Goodput
+📌 Synchronization
+Sync Latency (Eventual Consistency)
 
-How much data actually reaches subscribers (vs dropped)?
+Time from write → visible on another asset
 
-Measured in kbps per topic and per node.
+Sync Latency (Strong Consistency)
 
-Message Delivery Ratio
+Time from write → confirmed visible across all assets
 
-Delivered messages ÷ Sent messages (should be >99% unless you intentionally drop).
 
-Message Order Integrity
 
-Are events delivered in order, even after reconnects?
+High-Level KPIs
 
-B. System Resilience & Behavior
-Recovery Time After Disconnect
+KPI Name	Description
+End-to-End Write-to-Listen Latency	Time from write on one asset → listen received on another
+Sync Completion Time	Time to sync state across 1 or all assets under delay
+Read/Write Operation Rate	Nominal ops/sec (requests that succeed)
+System Initialization Time	Cold vs hot start-up time under load
+Availability Under DDIL	% time ISD responds to ops under constrained link
 
-How quickly can a node resync after being offline?
-
-Are missed messages replayed, or do subscribers just pick up from "now"?
-
-Queueing/Buffering Behavior
-
-Does the publisher buffer for slow links?
-
-Measure queue sizes and dropped messages when bandwidth drops.
-
-Interest Registration Success Rate
-
-Can nodes reliably register interest (topics) under network stress?
-
-Are subscriptions persistent across reconnects?
-
-Protocol Robustness
-
-Does GraphQL pub-sub (via WebSockets/MQTT/HTTP) reconnect gracefully?
-
-Do retries cause duplicates or missed events?
-
-C. Resource Impact
-CPU/Memory Usage Under Stress
-
-Does the ISD degrade gracefully, or crash when links get bad?
-
-Especially when buffering or retrying.
-
-Network Overhead
-
-How much control traffic (heartbeats, discovery, retries) vs actual data?
-
-High overhead can kill performance on low-bandwidth links.
-
-3. Test Scenarios to Cover
-For a comprehensive DDIL test, design test cases like:
-
-High latency + low bandwidth (satellite-like).
-
-Low latency + intermittent connectivity (mobile ad-hoc).
-
-Burst packet loss during heavy traffic.
-
-Multiple nodes coming in and out of range (mesh).
-
-Slow subscriber (backpressure scenario).
-
-Large number of topics with varying interest levels.
-
-Recovery after full blackout (node offline 5 minutes).
-
+Low-Level KPIs
+KPI Name	Description
+GraphQL Read Latency [avg/p95/p99]	Request → Response
+GraphQL Write Latency	Write → Ack
+Resolver Execution Time	Query/mutation resolution duration
+QoS Resource Allocation Time	Internal ISD latency for resource setup
+Local DB Access Time	Cache or volatile store lookup latency
+Zenoh Routing Delay	Publish → receive latency across Zenoh
+Networking Delay (tc-level)	Confirmed latency/jitter at netem point
+CPU Usage [%]	Under load, by service
+Memory Usage [MB]	Peak + average usage
+Listen Throughput [Mbit/s]	Write to listen data rate
+Storage Usage	Total state size during steady state
+Participant Scaling	# of active participants supported under DDIL
