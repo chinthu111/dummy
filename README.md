@@ -1,51 +1,41 @@
-What the scenario means
-This scenario emulates a satellite or long-range link between two assets, where:
+Low Latency + Intermittent Connectivity (Mobile Node Simulation)
+🔹 What the scenario means
+This scenario emulates a mobile asset (e.g., drone, vehicle, or field unit) that has a good quality connection when in range, but frequently disconnects and reconnects due to movement or unstable radio coverage.
 
-The connection is stable, but
-
-The latency is very high (due to long distances),
-
-The bandwidth is limited, and
-
-There is light packet loss.
-
-This type of environment is typical in remote operations where assets communicate over satellite or HF radios.
+Unlike high latency links, this connection is fast when active, but unreliable.
 
 🔹 How to simulate it
-Apply the following network impairments on the DDIL router between Asset 1 and Asset 2:
+Keep baseline latency low (e.g., 100ms), but simulate link loss periodically by disconnecting and reconnecting the asset from its network:
 
 bash
 Copy
 Edit
-# On the DDIL router (eth interfaces linked to Asset 1 and 2):
-tc qdisc add dev eth1 root netem delay 1500ms 300ms distribution normal rate 128kbit loss 3%
-tc qdisc add dev eth2 root netem delay 1500ms 300ms distribution normal rate 128kbit loss 3%
-delay: 1500ms RTT (simulates satellite delay)
+# Simulate link loss for 30 seconds every few minutes
+docker network disconnect net-asset3 asset3-comsgateway
+sleep 30
+docker network connect net-asset3 asset3-comsgateway
+Optionally, you can use tc loss and delay before/after to simulate signal degradation:
 
-jitter: ±300ms
-
-rate: 128kbps bandwidth cap
-
-loss: 3% random packet loss
-
+bash
+Copy
+Edit
+tc qdisc add dev ethX root netem delay 100ms loss 2%
 🔹 What you're testing (Mapped to ISD Characteristics)
-ISD Characteristic Category	What We're Testing in This Scenario
-Time Behavior	- Write-to-Listen Latency (End-to-End)
-- Resolver Execution Time
-- Sync Latency (eventual and strong)
-Resource Utilization	- CPU usage during constrained sync
-- Memory usage when buffering messages
-Sync Behavior	- Stability of COMS Gateway in slow environments
-- Zenoh queue behavior
-Capacity / Performance	- Throughput impact under bandwidth limits
-- GraphQL request timeout behavior
+ISD Characteristic Category	What We're Testing
+Time Behavior	- Reconnection latency
+- Resume time for sync and listeners
+Sync Behavior	- Sync consistency after disconnection
+- State catch-up timing
+Resource Utilization	- CPU/memory spikes during resync
+System Availability	- Listen reliability after reconnect
+- Application resilience
 
 🔹 What’s the network setup
-All assets are running as Docker containers on a single Ubuntu VM
+Asset 3 is running in a Docker container on Ubuntu VM
 
-A dedicated DDIL router container connects Asset 1 and Asset 2 via isolated Docker bridge networks
+Asset 3 is intermittently disconnected from the DDIL router
 
-Only the link between Asset 1 and Asset 2 is degraded
+COMS Gateway uses known IPs — sync must resume after reconnect
 
 markdown
 Copy
@@ -53,41 +43,18 @@ Edit
 +-------------------------------------------------------------+
 |                      Ubuntu VM (local)                      |
 |                                                             |
-|   [Asset 1] ----> eth1 --+                         +--> eth2 ---- [Asset 2]  |
-|                          |                         |                       |
-|                        [DDIL Router] (tc netem) <--+                       |
+| [Asset 3] <-- connect/disconnect --> [DDIL Router] <---> Other Assets |
 |                                                             |
 +-------------------------------------------------------------+
+All other assets stay connected to the DDIL router
+
+Only Asset 3’s network is manipulated to simulate mobility
+
 🔹 How to measure outcomes
 KPI / Metric	Measurement Method
-Write-to-Listen Latency	Time between a write on Asset 1 and a listen event on Asset 2
-Sync Completion Time	Time it takes to sync state from Asset 1 to Asset 2
-GraphQL Read/Write Latency (P95)	GraphQL server logs / metrics or Prometheus exporters
-Resource Usage (CPU/Memory)	Docker stats or OTEL collector metrics
-Throughput (Write/Listen Mbit/s)	Log data volume transferred over time
-Message Drop or Timeout Rate	Application logs, Zenoh debug mode, GraphQL error responses
-Queue Size / Buffering Behavior	Zenoh logs (if enabled) or custom instrumentation
-
-🧩 Step-by-Step Procedure (Local Testbed)
-Start all assets (6 groups of containers) using Docker Compose
-
-On the DDIL router container, identify interfaces for Asset 1 and Asset 2
-
-Apply the tc netem rules only to those interfaces
-
-Generate regular write operations from Asset 1 to a topic
-
-Have Asset 2 listening on the same topic
-
-Monitor sync time, listen latency, and system resource usage
-
-Log key events from:
-
-graphql-server (request/response latency)
-
-comsgateway (sync delays, retries)
-
-zenohd (message flow, retries if available)
-
-Docker stats / OTEL metrics (CPU, memory, throughput)
-
+Reconnection Time	Time from reconnect to operational sync (comsgateway logs)
+Missed Message Recovery	# of messages sent during disconnect vs recovered after reconnect
+Sync Catch-Up Duration	Time for Asset 3 to fully sync after rejoining
+Duplicate Message Rate	Application logs (compare write/listen IDs)
+System Stability	Any crashes, errors, or stuck listeners on reconnect
+CPU/Memory Spikes	Docker stats, OTEL, or Prometheus monitoring
