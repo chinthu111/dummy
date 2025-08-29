@@ -1,58 +1,83 @@
- Recovery After Full Blackout
-🔹 What the scenario means
-This scenario simulates a complete asset-level outage (e.g., due to power loss, software crash, or network failure) where the asset is:
+DDIL Network Setup
 
-Completely offline for an extended period (e.g., 5–10 minutes),
+This project sets up a simulated DDIL (Disconnected, Degraded, Intermittent, and Limited) network using Docker Compose.
+It creates three isolated asset networks (Asset 1, Asset 2, Asset 3) that are interconnected via a DDIL router.
 
-Then rejoins the network, reconnects with other assets, and must catch up on missed state and messages.
+How the Setup Works
 
-This reflects field scenarios like:
+Three user-defined Docker networks are created:
 
-Temporary asset failure in harsh environments,
+Asset 1 → 10.10.2.0/24
 
-A rebooted node after mission redeployment.
+Asset 2 → 10.10.1.0/24
 
-🔹 How to simulate it
-Stop all containers for one asset (e.g., Asset 6):
+Asset 3 → 10.10.3.0/24
 
-bash
-Copy
-Edit
-docker stop asset6-graphql asset6-zenoh asset6-comsgateway asset6-influxdb
-Wait for 5+ minutes (during which other assets continue normal operations).
+Each asset has:
 
-Restart the containers:
+A Zenoh router for data exchange.
 
-bash
-Copy
-Edit
-docker start asset6-graphql asset6-zenoh asset6-comsgateway asset6-influxdb
-🔹 What you're testing (Mapped to ISD Characteristics)
-ISD Characteristic Category	What We're Testing
-Sync Behavior	- Replay of missed data from other assets
-- COMS Gateway state re-init
-Consistency & Recovery	- Data integrity after reconnection
-- Eventual/strong sync resolution
-Time Behavior	- Sync latency (post-blackout catch-up)
-- Resolver recovery time
-Resource Utilization	- CPU/Memory spike during catch-up
-- Storage increase after syncing
+A Comss-GW node for communication.
 
-🔹 What’s the network setup
-All assets on a single Ubuntu VM with Docker.
+Optional GraphQL and Dummy containers.
 
-Asset 6 is taken completely offline (containers stopped).
+The DDIL router:
 
-Other assets remain connected to DDIL router and continue operating normally.
+Connects all three networks.
 
-markdown
-Copy
-Edit
-+-------------------------------------------------------------------+
-|                          Ubuntu VM (local)                        |
-|                                                                   |
-|  [Asset 1] --+                                                    |
-|  [Asset 2] --+                                                    |
-|     ...      +--> [DDIL Router] <---> [Asset 6] (offline 5 mins)  |
-|                                                                   |
-+-------------------------------------------------------------------+
+Has IPs .254 on each subnet.
+
+Enables IP forwarding (net.ipv4.ip_forward=1).
+
+Allows inter-network routing via iptables -P FORWARD ACCEPT.
+
+How to Deploy
+# Start everything
+docker compose up -d
+
+# Stop everything
+docker compose down
+
+How to Verify the Setup
+1. Check container status
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Networks}}"
+
+2. Verify IP addressing
+docker exec -it comms-gw1 ip a
+docker exec -it comms-gw2 ip a
+docker exec -it comms-gw3 ip a
+
+3. Test routing between assets
+# From Asset 1 → Asset 2 & Asset 3
+docker exec -it comms-gw1 ping -c2 10.10.1.10
+docker exec -it comms-gw1 ping -c2 10.10.3.10
+
+# From Asset 2 → Asset 1 & Asset 3
+docker exec -it comms-gw2 ping -c2 10.10.2.11
+docker exec -it comms-gw2 ping -c2 10.10.3.10
+
+# From Asset 3 → Asset 1 & Asset 2
+docker exec -it comms-gw3 ping -c2 10.10.2.11
+docker exec -it comms-gw3 ping -c2 10.10.1.10
+
+4. Check router forwarding
+docker exec -it ddil-router sysctl net.ipv4.ip_forward
+docker exec -it ddil-router iptables -S FORWARD
+
+
+Expected:
+
+net.ipv4.ip_forward = 1
+-P FORWARD ACCEPT
+
+Key Points
+
+All inter-network traffic flows through the DDIL router.
+
+.254 is the gateway IP for each subnet.
+
+Comss-GW containers add static routes pointing to the DDIL router.
+
+Zenoh routers enable messaging between assets.
+
+GraphQL and Dummy containers stay isolated within their own subnet.
