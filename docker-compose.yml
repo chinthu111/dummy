@@ -1,0 +1,67 @@
+# compose.asset1.yml
+version: "3.9"
+
+# Declare all three networks up-front (router will join later)
+networks:
+  intra-1:   # Asset 1 (left) 10.10.2.0/24
+    driver: bridge
+    ipam: { config: [ { subnet: 10.10.2.0/24 } ] }
+  intra-2:   # Asset 1 (right) 10.10.1.0/24 (unused in this file)
+    driver: bridge
+    ipam: { config: [ { subnet: 10.10.1.0/24 } ] }
+  intra-3:   # Asset 3          10.10.3.0/24 (unused in this file)
+    driver: bridge
+    ipam: { config: [ { subnet: 10.10.3.0/24 } ] }
+
+services:
+  # ---- Asset 1 services on 10.10.2.0/24 ----
+  zenoh-router1:
+    image: eclipse/zenoh:0.11.0-rc.3
+    container_name: zenoh-router1
+    command: ["--config", "/etc/zenoh/config.json5"]
+    restart: unless-stopped
+    volumes:
+      - ./test/zenohd-config1.json5:/etc/zenoh/config.json5:ro
+    networks:
+      intra-1:
+        ipv4_address: 10.10.2.10
+
+  comss-gw1:
+    image: simple-comms:0.1       # your local Comss-GT image
+    container_name: comss-gw1
+    cap_add: [ NET_ADMIN ]        # needed later when we add routes via the DDIL router
+    volumes:
+      - ./test/config_1.json:/usr/src/app/config.json
+    # Route adds will work once we add the router (.254) later.
+    command: >
+      sh -c '
+        ip route add 10.10.1.0/24 via 10.10.2.254 || true &&
+        ip route add 10.10.3.0/24 via 10.10.2.254 || true &&
+        exec python main.py
+      '
+    depends_on: [ zenoh-router1 ]
+    networks:
+      intra-1:
+        ipv4_address: 10.10.2.11
+
+  graphql-srv-a1:
+    image: graphql-srv:local      # replace with your image name
+    container_name: graphql-srv-a1
+    networks:
+      intra-1:
+        ipv4_address: 10.10.2.12
+    # ports: ["8081:8080"]        # uncomment if you need host access
+
+  dummy-top-a1:
+    image: dummy:local            # replace with your image name
+    container_name: dummy-top-a1
+    networks:
+      intra-1:
+        ipv4_address: 10.10.2.13
+
+  dummy-bot-a1:
+    image: dummy:local
+    container_name: dummy-bot-a1
+    networks:
+      intra-1:
+        ipv4_address: 10.10.2.14
