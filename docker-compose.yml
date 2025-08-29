@@ -13,6 +13,26 @@ networks:
     driver: bridge
     ipam: { config: [ { subnet: 10.10.3.0/24 } ] }
 
+  ddil-router:
+    image: tctest:0.2
+    container_name: inter-router
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.ip_forward: "1"
+    networks:
+      intra-2: { ipv4_address: 10.10.1.254 }   # Asset 2 network
+      intra-1: { ipv4_address: 10.10.2.254 }   # Asset 1 network
+      intra-3: { ipv4_address: 10.10.3.254 }   # Asset 3 network
+    command: >
+      sh -c '
+        iptables -P FORWARD ACCEPT &&
+        # rename NICs for clarity (optional)
+        ip link set dev $(ip -o -4 addr show | awk "$4 ~ /^10\.10\.1\./ {print $2}") name eth0_a2 &&
+        ip link set dev $(ip -o -4 addr show | awk "$4 ~ /^10\.10\.2\./ {print $2}") name eth1_a1 &&
+        ip link set dev $(ip -o -4 addr show | awk "$4 ~ /^10\.10\.3\./ {print $2}") name eth3_a3 &&
+        tail -f /dev/null
+        
 services:
   # ---- Asset 1 services on 10.10.2.0/24 ----
   zenoh-router1:
