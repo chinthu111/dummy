@@ -1,16 +1,16 @@
-# DDIL Scenario 2 — **Degraded Link (High Latency + Jitter)**
+# DDIL Scenario 3 — **Bandwidth-Constrained Link**
 
-This scenario simulates **SATCOM-like degraded conditions** on a specific asset link (e.g., **Asset-2 / 10.10.1.0/24**) by introducing **high latency, jitter, and optional packet loss** on the DDIL router.  
-We measure how inter-asset communication and **Performance Efficiency** KPIs are affected when connectivity remains but performance degrades.
+This scenario simulates a **narrowband tactical link** (e.g., HF/SATCOM) by restricting the available bandwidth between assets.  
+We measure how inter-asset communication and **Performance Efficiency** KPIs are impacted when the link has **very limited throughput** but remains functional.
 
 ---
 
 ## Goal
 
-Validate system behavior under poor network conditions:
-- TCP sessions remain **connected** but slow.
-- Comss-GW may **retry or timeout** depending on configuration.
-- GraphQL pub/sub works but with **delays** and possible **out-of-order** updates.
+Validate system behavior under **low-bandwidth conditions**:
+- TCP sessions stay up but throughput drops sharply.
+- Comss-GW queues may **grow** if messages exceed available bandwidth.
+- GraphQL pub/sub messages may be **delayed** due to slower transfer.
 
 ---
 
@@ -19,41 +19,37 @@ Validate system behavior under poor network conditions:
 - Three asset networks (10.10.2/24, 10.10.1/24, 10.10.3/24) attached to `ddil-router`.
 - Comss-GW IPs: A1=`10.10.2.11`, A2=`10.10.1.10`, A3=`10.10.3.10`.
 
-Find the router interface for the asset link to degrade (example shows A2):
+Find the router interface for the asset link to limit (example shows A2):
 ```bash
 docker exec -it ddil-router sh -lc 'ip -o -4 addr show | grep 10\.10'
 # Identify the iface that has 10.10.1.254/24 -> use that as ETH_A2 (e.g., eth1)
 
 
-# Add 800ms average latency, ±200ms jitter, 5% packet loss
+# Limit Asset-2 link to 128 kbps with a small burst buffer and latency tolerance
 docker exec -it ddil-router sh -lc '
-tc qdisc add dev eth1 root netem delay 800ms 200ms 25% loss 5%'
-
-# Measure RTT from router — expect ~800ms or higher
-docker exec -it ddil-router ping -c3 10.10.1.10
+tc qdisc add dev eth1 root tbf rate 128kbit burst 16kbit latency 300ms'
 
 
-
-# Measure RTT from router to A2
-docker exec -it ddil-router ping -c3 10.10.1.10
-
-# Show applied netem settings
+# Show applied bandwidth settings
 docker exec -it ddil-router tc qdisc show dev eth1
 
 
-Success Criteria
 
-A2 remains reachable but RTT increases significantly.
+**Expected System Behavior
+Functional
 
-TCP connections stay alive, but throughput decreases.
+A2 ⇄ (A1,A3): TCP connections stay established, but throughput is capped.
 
-GraphQL subscriptions work but with visible delays.
+GraphQL cross-asset: messages and subscriptions still work but respond slower.
 
-No service crashes or unexpected disconnects.
-
-Upon restoring, system performance returns to normal.
+Within A2: local communication is unaffected.**
 
 
+Restore (end of test)
 docker exec -it ddil-router tc qdisc del dev eth1 root
+
+
+Verify restoration
+
 docker exec -it ddil-router tc qdisc show dev eth1   # should show "noqueue"
-docker exec -it ddil-router ping -c3 10.10.1.10     # RTT returns to normal
+docker exec -it ddil-router ping -c3 10.10.1.10     # RTT and speed back to normal
