@@ -1,7 +1,0 @@
-id,name,type,maximumBandwidth,defaults.bandwidth,defaults.latency,defaults.jitter,defaults.loss,defaults.corruption,defaults.mtu
-1,Network1,netsim_managed,20000000,1000000,10,1,0,0,1500
-2,Network2,netsim_managed,20000000,1000000,10,1,0,0,1500
-1011,ModemN1L1_nodep,unmanaged,,,,,,,,
-1012,ModemN1L2_nodep,unmanaged,,,,,,,,
-500,mgmt_net,unmanaged,,,,,,,,
-601,userLan_net,unmanaged,,,,,,,,
