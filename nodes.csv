@@ -1,5 +1,0 @@
-id,name,type,templateName,osType,tags,description
-1,router1,plexos,SODENS-VYOS-1.5-v23.11.28.11.13.template,linux,configure_vyos,
-9001001,modemN1L1,netsim_link,SODENS-LinkVM-v1.6.1.template,linux,netsim_link,
-9001002,modemN1L2,netsim_link,SODENS-LinkVM-v1.6.1.template,linux,netsim_link,
-8001001,mission-computer1,compute_node,Linux-ubuntu-20.04lts-v24.01.template,linux,interface_config;set_hostname;openbach_agent,Primary mission computer
