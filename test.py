@@ -1,188 +1,79 @@
-#!/usr/bin/env python3
-"""
-validate_topology_csvs.py
+#!/usr/bin/python
 
-Validates nodes.csv, interfaces.csv, and networks.csv before generating topology.json.
+from ansible.module_utils.basic import AnsibleModule
+import subprocess
+import os
 
-Checks performed:
-1. Structural validation:
-   - Required columns exist
-   - No empty mandatory fields
-2. Cross-reference validation:
-   - Interfaces reference valid node_id or node_name
-   - Interfaces reference valid networkId
-3. Duplicate detection:
-   - Node IDs must be unique
-   - Node names should be unique (warning if duplicates)
-   - Network IDs must be unique
-   - Interface names must be unique per node
-4. Format checks:
-   - IDs, networkIds must be integers
-   - ipv4Addr in CIDR format
-   - macAddr in XX:XX:XX:XX:XX:XX format
-
-Usage:
-    python validate_topology_csvs.py --nodes nodes.csv --interfaces interfaces.csv --networks networks.csv
-"""
-
-import argparse, csv, re, ipaddress
-from collections import defaultdict, Counter
-
-def read_csv(path):
-    with open(path, newline='') as f:
-        return list(csv.DictReader(f))
-
-def validate_nodes(rows, errors, warnings):
-    seen_ids = set()
-    seen_names = Counter()
-    for i, row in enumerate(rows, start=2):  # header is row 1
-        rid = row.get("id", "").strip()
-        name = row.get("name", "").strip()
-        typ = row.get("type", "").strip()
-
-        # Required fields
-        if not name:
-            errors.append(f"nodes.csv line {i}: Missing name")
-        if not typ:
-            errors.append(f"nodes.csv line {i}: Missing type")
-
-        # ID checks
-        if rid:
-            try:
-                rid_int = int(rid)
-                if rid_int in seen_ids:
-                    errors.append(f"nodes.csv line {i}: Duplicate node id {rid_int}")
-                seen_ids.add(rid_int)
-            except ValueError:
-                errors.append(f"nodes.csv line {i}: Invalid id '{rid}' (must be integer)")
-        seen_names[name] += 1
-
-    # Warn if duplicate names
-    for n, count in seen_names.items():
-        if count > 1:
-            warnings.append(f"nodes.csv: Duplicate node name '{n}' appears {count} times")
-
-    return seen_ids, set(seen_names.keys())
-
-def validate_networks(rows, errors, warnings):
-    seen_ids = set()
-    seen_names = Counter()
-    for i, row in enumerate(rows, start=2):
-        rid = row.get("id", "").strip()
-        name = row.get("name", "").strip()
-        if not rid:
-            errors.append(f"networks.csv line {i}: Missing id")
-        else:
-            try:
-                rid_int = int(rid)
-                if rid_int in seen_ids:
-                    errors.append(f"networks.csv line {i}: Duplicate network id {rid_int}")
-                seen_ids.add(rid_int)
-            except ValueError:
-                errors.append(f"networks.csv line {i}: Invalid id '{rid}' (must be integer)")
-        if not name:
-            errors.append(f"networks.csv line {i}: Missing name")
-        seen_names[name] += 1
-
-    # Warn if duplicate names
-    for n, count in seen_names.items():
-        if count > 1:
-            warnings.append(f"networks.csv: Duplicate network name '{n}' appears {count} times")
-
-    return seen_ids
-
-def validate_interfaces(rows, node_ids, node_names, network_ids, errors, warnings):
-    iface_keys = set()
-    for i, row in enumerate(rows, start=2):
-        nid = row.get("node_id", "").strip()
-        nname = row.get("node_name", "").strip()
-        iface_name = row.get("name", "").strip()
-        netid = row.get("networkId", "").strip()
-        ip = row.get("ipv4Addr", "").strip()
-        mac = row.get("macAddr", "").strip()
-
-        # Node check
-        node_ref = None
-        if nid:
-            try:
-                nid_int = int(nid)
-                if nid_int not in node_ids:
-                    errors.append(f"interfaces.csv line {i}: node_id {nid_int} not found in nodes.csv")
-                node_ref = f"id:{nid_int}"
-            except ValueError:
-                errors.append(f"interfaces.csv line {i}: Invalid node_id '{nid}'")
-        elif nname:
-            if nname not in node_names:
-                errors.append(f"interfaces.csv line {i}: node_name '{nname}' not found in nodes.csv")
-            node_ref = f"name:{nname}"
-        else:
-            errors.append(f"interfaces.csv line {i}: Missing both node_id and node_name")
-
-        # Interface name
-        if not iface_name:
-            errors.append(f"interfaces.csv line {i}: Missing interface name")
-
-        # Network check
-        if not netid:
-            errors.append(f"interfaces.csv line {i}: Missing networkId")
-        else:
-            try:
-                netid_int = int(netid)
-                if netid_int not in network_ids:
-                    errors.append(f"interfaces.csv line {i}: networkId {netid_int} not found in networks.csv")
-            except ValueError:
-                errors.append(f"interfaces.csv line {i}: Invalid networkId '{netid}'")
-
-        # Duplicate interface name per node
-        if node_ref and iface_name:
-            key = (node_ref, iface_name)
-            if key in iface_keys:
-                errors.append(f"interfaces.csv line {i}: Duplicate interface '{iface_name}' for {node_ref}")
-            iface_keys.add(key)
-
-        # IP format check
-        if ip:
-            try:
-                ipaddress.ip_network(ip, strict=False)
-            except ValueError:
-                errors.append(f"interfaces.csv line {i}: Invalid ipv4Addr '{ip}' (must be CIDR)")
-
-        # MAC format check
-        if mac:
-            if not re.match(r"^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$", mac):
-                errors.append(f"interfaces.csv line {i}: Invalid macAddr '{mac}'")
+def run_command(cmd, cwd=None):
+    """Run shell command and capture output"""
+    result = subprocess.run(
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True,
+        cwd=cwd
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--nodes", required=True)
-    ap.add_argument("--interfaces", required=True)
-    ap.add_argument("--networks", required=True)
-    args = ap.parse_args()
+    module = AnsibleModule(
+        argument_spec=dict(
+            nodes=dict(required=True, type='str'),
+            interfaces=dict(required=True, type='str'),
+            networks=dict(required=True, type='str'),
+            out=dict(default="topology.json", type='str'),
+            schema=dict(default="https://portal.mipn.co.uk/topologyschema-01/schema#", type='str'),
+            python_bin=dict(default="python3", type='str'),
+            scripts_dir=dict(default="scripts", type='str'),
+        ),
+        supports_check_mode=False
+    )
 
-    errors, warnings = [], []
+    nodes = module.params["nodes"]
+    interfaces = module.params["interfaces"]
+    networks = module.params["networks"]
+    out = module.params["out"]
+    schema = module.params["schema"]
+    python_bin = module.params["python_bin"]
+    scripts_dir = module.params["scripts_dir"]
 
-    nodes = read_csv(args.nodes)
-    networks = read_csv(args.networks)
-    interfaces = read_csv(args.interfaces)
+    validate_script = os.path.join(scripts_dir, "validate_topology_csvs.py")
+    generate_script = os.path.join(scripts_dir, "generate_topology.py")
 
-    node_ids, node_names = validate_nodes(nodes, errors, warnings)
-    network_ids = validate_networks(networks, errors, warnings)
-    validate_interfaces(interfaces, node_ids, node_names, network_ids, errors, warnings)
+    # --- Step 1: Validate CSVs ---
+    validate_cmd = (
+        f"{python_bin} {validate_script} "
+        f"--nodes {nodes} --interfaces {interfaces} --networks {networks}"
+    )
+    rc, stdout, stderr = run_command(validate_cmd)
+    if rc != 0:
+        module.fail_json(
+            msg="Validation failed",
+            stdout=stdout,
+            stderr=stderr,
+            cmd=validate_cmd
+        )
 
-    print("Validation Results:")
-    if errors:
-        print("\nErrors:")
-        for e in errors:
-            print("  -", e)
-    if warnings:
-        print("\nWarnings:")
-        for w in warnings:
-            print("  -", w)
-    if not errors and not warnings:
-        print("  All good ✅")
+    # --- Step 2: Generate topology ---
+    gen_cmd = (
+        f"{python_bin} {generate_script} "
+        f"--schema {schema} --nodes {nodes} --interfaces {interfaces} --networks {networks} --out {out}"
+    )
+    rc, stdout, stderr = run_command(gen_cmd)
+    if rc != 0:
+        module.fail_json(
+            msg="Topology generation failed",
+            stdout=stdout,
+            stderr=stderr,
+            cmd=gen_cmd
+        )
 
-    if errors:
-        exit(1)  # fail if errors
+    module.exit_json(
+        changed=True,
+        msg=f"Topology generated successfully: {out}",
+        stdout=stdout,
+        cmd=gen_cmd
+    )
 
 if __name__ == "__main__":
     main()
