@@ -2,7 +2,7 @@
 """
 draw_topology.py
 
-Reads topology.json and outputs a Mermaid diagram file (topology.mmd).
+Reads topology.json and outputs a Markdown-ready Mermaid diagram file (topology.mmd).
 
 Usage:
     python draw_topology.py --topology topology.json --out topology.mmd
@@ -15,16 +15,15 @@ def build_mermaid(topology):
     lines = ["graph TD"]
 
     # Index nodes by id for quick lookup
-    nodes_by_id = {node["id"]: node for node in topology.get("nodes", [])}
     networks_by_id = {net["id"]: net for net in topology.get("networks", [])}
 
-    # Add network nodes (special shape for clarity)
+    # Add networks (ellipses)
     for net in topology.get("networks", []):
         nid = net["id"]
         name = net.get("name", f"net{nid}")
         lines.append(f'  net{nid}(["{name}"])')
 
-    # Add edges node -> network
+    # Add nodes and edges
     for node in topology.get("nodes", []):
         node_label = node.get("name", f'node{node["id"]}')
         lines.append(f'  node{node["id"]}["{node_label}"]')
@@ -41,19 +40,20 @@ def build_mermaid(topology):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--topology", required=True, help="Input topology.json file")
-    ap.add_argument("--out", default="topology.mmd", help="Output Mermaid file")
+    ap.add_argument("--out", default="topology.mmd", help="Output Mermaid Markdown file")
     args = ap.parse_args()
 
     with open(args.topology) as f:
         topo = json.load(f)
 
-    mermaid = build_mermaid(topo)
+    mermaid_body = build_mermaid(topo)
+
+    wrapped = f"```mermaid\n{mermaid_body}\n```"
 
     with open(args.out, "w") as f:
-        f.write(mermaid)
+        f.write(wrapped)
 
-    print(f"Mermaid diagram saved to {args.out}")
-    print("Preview with GitLab/GitHub markdown, or convert using mermaid-cli (mmdc).")
+    print(f"Markdown-ready Mermaid diagram saved to {args.out}")
 
 if __name__ == "__main__":
     main()
