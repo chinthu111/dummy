@@ -1,0 +1,41 @@
+---
+- name: Fetch CSVs and build topology
+  hosts: localhost
+  gather_facts: no
+  vars:
+    artifactory_url: "{{ lookup('env', 'ARTIFACTORY_URL') }}"
+    artifactory_token: "{{ lookup('env', 'ARTIFACTORY_TOKEN') }}"
+    csv_version: "{{ lookup('env', 'CSV_VERSION') | default('latest') }}"
+
+  tasks:
+    - name: Download nodes.csv
+      uri:
+        url: "{{ artifactory_url }}/{{ csv_version }}/nodes.csv"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ artifactory_token }}"
+        dest: nodes.csv
+
+    - name: Download interfaces.csv
+      uri:
+        url: "{{ artifactory_url }}/{{ csv_version }}/interfaces.csv"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ artifactory_token }}"
+        dest: interfaces.csv
+
+    - name: Download networks.csv
+      uri:
+        url: "{{ artifactory_url }}/{{ csv_version }}/networks.csv"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ artifactory_token }}"
+        dest: networks.csv
+
+    - name: Validate and generate topology
+      topology_builder:
+        nodes: nodes.csv
+        interfaces: interfaces.csv
+        networks: networks.csv
+        out: topology.json
+        validate_only: false
