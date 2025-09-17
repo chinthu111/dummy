@@ -1,15 +1,1 @@
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Run GitLab Validate Job",
-      "type": "shell",
-      "command": "gitlab-runner exec shell validate"
-    },
-    {
-      "label": "Run GitLab Build Job",
-      "type": "shell",
-      "command": "gitlab-runner exec shell build"
-    }
-  ]
-}
+
