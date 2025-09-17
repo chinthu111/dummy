@@ -1,0 +1,22 @@
+stages:
+  - validate
+  - build
+
+variables:
+  ARTIFACTORY_URL: "https://my-artifactory.local/repo/topologies"
+  ARTIFACTORY_TOKEN: "$ARTIFACTORY_TOKEN"
+  CSV_VERSION: "2025-09-15"
+
+validate:
+  stage: validate
+  script:
+    - ansible-playbook playbook.yml -e "validate_only=true"
+  allow_failure: false
+
+build:
+  stage: build
+  script:
+    - ansible-playbook playbook.yml -e "validate_only=false"
+  artifacts:
+    paths:
+      - topology.json
