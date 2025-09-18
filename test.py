@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-import json
-import sys
+import json, sys, difflib
 
 def normalize(obj):
     """Normalize JSON recursively for fair comparison."""
@@ -9,7 +8,7 @@ def normalize(obj):
         for k, v in obj.items():
             if k == "tags":
                 # tags should always be a list
-                if not v: 
+                if not v:
                     norm[k] = []
                 elif isinstance(v, str):
                     norm[k] = [t for t in v.split(";") if t]
@@ -32,7 +31,17 @@ def main(file1, file2):
         print("✅ Topologies are semantically equivalent.")
         sys.exit(0)
     else:
-        print("❌ Topologies differ (after normalization).")
+        print("❌ Topologies differ (after normalization):\n")
+        # Pretty print both JSONs with sorted keys for stable diff
+        text1 = json.dumps(topo1, indent=2, sort_keys=True).splitlines()
+        text2 = json.dumps(topo2, indent=2, sort_keys=True).splitlines()
+        diff = difflib.unified_diff(
+            text1, text2,
+            fromfile=file1, tofile=file2,
+            lineterm=""
+        )
+        for line in diff:
+            print(line)
         sys.exit(1)
 
 if __name__ == "__main__":
